@@ -15,14 +15,20 @@ describe("views integration", () => {
     await runtime.close();
   });
 
-  it("redirects root to /app and serves the app shell", async () => {
+  it("redirects root to /app and serves all view routes from app shell", async () => {
     const rootResponse = await request(runtime.app).get("/");
     expect(rootResponse.status).toBe(302);
     expect(rootResponse.headers.location).toBe("/app");
 
-    const appResponse = await request(runtime.app).get("/app");
-    expect(appResponse.status).toBe(200);
-    expect(appResponse.headers["content-type"]).toContain("text/html");
-    expect(appResponse.text).toContain("Operator Views");
+    const routes = ["/app", "/app/audit-logs", "/app/usage", "/app/api-keys"];
+    for (const route of routes) {
+      const response = await request(runtime.app).get(route);
+      expect(response.status).toBe(200);
+      expect(response.headers["content-type"]).toContain("text/html");
+      expect(response.text).toContain("Operator Console");
+      expect(response.text).toContain("Audit Logs View");
+      expect(response.text).toContain("Usage View");
+      expect(response.text).toContain("API Keys View");
+    }
   });
 });

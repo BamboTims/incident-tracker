@@ -17,88 +17,174 @@
     <main class="layout">
       <header class="hero">
         <p class="eyebrow">Incident Tracker</p>
-        <h1>Operator Views</h1>
+        <h1>Operator Console</h1>
         <p class="subtitle">
-          Session auth + tenancy + incidents in one browser workflow.
+          Session auth, tenancy, incidents, audit logs, usage, and API keys in one browser workflow.
         </p>
         <div id="session-pill" class="pill">Loading session...</div>
       </header>
 
-      <section class="panel stagger">
-        <h2>Auth</h2>
-        <form id="login-form" class="stack">
-          <label>
-            Email
-            <input id="login-email" type="email" autocomplete="email" required />
-          </label>
-          <label>
-            Password
-            <input
-              id="login-password"
-              type="password"
-              autocomplete="current-password"
-              required
-            />
-          </label>
+      <aside class="panel nav stagger">
+        <p class="nav-title">Views</p>
+        <nav class="nav-links">
+          <a href="/app" data-page-link="incidents">Incidents</a>
+          <a href="/app/audit-logs" data-page-link="audit-logs">Audit Logs</a>
+          <a href="/app/usage" data-page-link="usage">Usage</a>
+          <a href="/app/api-keys" data-page-link="api-keys">API Keys</a>
+        </nav>
+      </aside>
+
+      <section class="workspace">
+        <div class="panel control stagger">
+          <h2>Session And Tenant</h2>
+          <div class="split">
+            <form id="login-form" class="stack">
+              <label>
+                Email
+                <input id="login-email" type="email" autocomplete="email" required />
+              </label>
+              <label>
+                Password
+                <input
+                  id="login-password"
+                  type="password"
+                  autocomplete="current-password"
+                  required
+                />
+              </label>
+              <div class="row">
+                <button type="submit">Login</button>
+                <button id="logout-button" type="button" class="muted">
+                  Logout
+                </button>
+              </div>
+            </form>
+
+            <div class="stack">
+              <form id="tenant-form" class="stack">
+                <label>
+                  Tenant name
+                  <input id="tenant-name" type="text" minlength="3" maxlength="80" required />
+                </label>
+                <button type="submit">Create Tenant</button>
+              </form>
+              <div class="row">
+                <button id="refresh-tenants" type="button" class="muted">
+                  Refresh Tenants
+                </button>
+              </div>
+              <ul id="tenant-list" class="list"></ul>
+            </div>
+          </div>
+        </div>
+
+        <section id="page-incidents" class="page panel stagger">
+          <h2>Incidents View</h2>
+          <form id="incident-form" class="stack">
+            <label>
+              Title
+              <input id="incident-title" type="text" minlength="3" maxlength="200" required />
+            </label>
+            <label>
+              Severity
+              <select id="incident-severity" required>
+                <option value="SEV1">SEV1</option>
+                <option value="SEV2">SEV2</option>
+                <option value="SEV3" selected>SEV3</option>
+                <option value="SEV4">SEV4</option>
+              </select>
+            </label>
+            <label>
+              Description
+              <textarea id="incident-description" rows="3" maxlength="4000"></textarea>
+            </label>
+            <button type="submit">Create Incident</button>
+          </form>
           <div class="row">
-            <button type="submit">Login</button>
-            <button id="logout-button" type="button" class="muted">
-              Logout
+            <button id="refresh-incidents" type="button" class="muted">
+              Refresh Incidents
             </button>
           </div>
-        </form>
-      </section>
+          <ul id="incident-list" class="list"></ul>
+        </section>
 
-      <section class="panel stagger">
-        <h2>Tenants</h2>
-        <form id="tenant-form" class="stack">
-          <label>
-            Tenant name
-            <input id="tenant-name" type="text" minlength="3" maxlength="80" required />
-          </label>
-          <button type="submit">Create Tenant</button>
-        </form>
-        <div class="row">
-          <button id="refresh-tenants" type="button" class="muted">
-            Refresh Tenants
-          </button>
-        </div>
-        <ul id="tenant-list" class="list"></ul>
-      </section>
+        <section id="page-audit-logs" class="page panel stagger">
+          <h2>Audit Logs View</h2>
+          <div class="row">
+            <label class="compact">
+              Limit
+              <input id="audit-limit" type="number" min="1" max="100" value="25" />
+            </label>
+            <button id="refresh-audit-logs" type="button" class="muted">
+              Refresh Audit Logs
+            </button>
+          </div>
+          <ul id="audit-log-list" class="list"></ul>
+        </section>
 
-      <section class="panel stagger">
-        <h2>Incidents</h2>
-        <form id="incident-form" class="stack">
-          <label>
-            Title
-            <input id="incident-title" type="text" minlength="3" maxlength="200" required />
-          </label>
-          <label>
-            Severity
-            <select id="incident-severity" required>
-              <option value="SEV1">SEV1</option>
-              <option value="SEV2">SEV2</option>
-              <option value="SEV3" selected>SEV3</option>
-              <option value="SEV4">SEV4</option>
-            </select>
-          </label>
-          <label>
-            Description
-            <textarea id="incident-description" rows="3" maxlength="4000"></textarea>
-          </label>
-          <button type="submit">Create Incident</button>
-        </form>
-        <div class="row">
-          <button id="refresh-incidents" type="button" class="muted">
-            Refresh Incidents
-          </button>
-        </div>
-        <ul id="incident-list" class="list"></ul>
-      </section>
+        <section id="page-usage" class="page panel stagger">
+          <h2>Usage View</h2>
+          <div class="row">
+            <button id="refresh-usage" type="button" class="muted">Refresh Usage</button>
+          </div>
+          <dl id="usage-summary" class="summary">
+            <div><dt>Metric</dt><dd id="usage-metric">n/a</dd></div>
+            <div><dt>Used</dt><dd id="usage-used">n/a</dd></div>
+            <div><dt>Limit</dt><dd id="usage-limit">n/a</dd></div>
+            <div><dt>Remaining</dt><dd id="usage-remaining">n/a</dd></div>
+            <div><dt>Window</dt><dd id="usage-window">n/a</dd></div>
+          </dl>
+        </section>
 
-      <section class="panel logs stagger">
-        <h2>Activity</h2>
-        <pre id="activity-log" class="activity"></pre>
+        <section id="page-api-keys" class="page panel stagger">
+          <h2>API Keys View</h2>
+          <div class="split">
+            <div class="stack">
+              <h3>Service Accounts</h3>
+              <form id="service-account-form" class="stack">
+                <label>
+                  Name
+                  <input id="service-account-name" type="text" minlength="3" maxlength="120" required />
+                </label>
+                <button type="submit">Create Service Account</button>
+              </form>
+              <ul id="service-account-list" class="list"></ul>
+            </div>
+
+            <div class="stack">
+              <h3>API Keys</h3>
+              <form id="api-key-form" class="stack">
+                <label>
+                  Service account
+                  <select id="api-key-service-account" required></select>
+                </label>
+                <label>
+                  Key name
+                  <input id="api-key-name" type="text" minlength="3" maxlength="120" required />
+                </label>
+                <fieldset class="scopes">
+                  <legend>Scopes</legend>
+                  <label><input id="scope-read" type="checkbox" checked /> read</label>
+                  <label><input id="scope-write" type="checkbox" checked /> write</label>
+                </fieldset>
+                <button type="submit">Create API Key</button>
+              </form>
+              <div class="row">
+                <button id="refresh-api-keys" type="button" class="muted">
+                  Refresh API Keys
+                </button>
+              </div>
+              <ul id="api-key-list" class="list"></ul>
+              <p class="secret-label">Last issued secret (shown once):</p>
+              <pre id="api-key-secret" class="secret-box">No key issued yet.</pre>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel logs stagger">
+          <h2>Activity</h2>
+          <pre id="activity-log" class="activity"></pre>
+        </section>
       </section>
     </main>
 

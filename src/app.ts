@@ -240,9 +240,11 @@ export async function createApp(
   app.get("/", (_request, response) => {
     response.redirect("/app");
   });
-  app.get("/app", (_request, response) => {
-    response.sendFile(path.join(publicRoot, "index.html"));
-  });
+  for (const viewPath of ["/app", "/app/audit-logs", "/app/usage", "/app/api-keys"]) {
+    app.get(viewPath, (_request, response) => {
+      response.sendFile(path.join(publicRoot, "index.html"));
+    });
+  }
 
   app.get("/health", (_request, response) => {
     response.status(200).json({
