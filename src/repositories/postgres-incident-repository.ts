@@ -198,7 +198,7 @@ async function replaceIncidentServices(
   }
 }
 
-async function loadIncidentWithServices(client: PoolClient, incidentId: string): Promise<Incident | null> {
+async function loadIncidentWithServices(client: PoolClient, incidentId: string, tenantId: string): Promise<Incident | null> {
   const result = await client.query<IncidentWithServicesRow>(
     `
     SELECT
@@ -212,26 +212,28 @@ async function loadIncidentWithServices(client: PoolClient, incidentId: string):
       ON s.incident_id = i.id
       AND s.tenant_id = i.tenant_id
     WHERE i.id = $1
+      AND i.tenant_id = $2
     GROUP BY i.id
     LIMIT 1
     `,
-    [incidentId]
+    [incidentId, tenantId]
   );
 
   const row = getSingleRow(result.rows);
   return row === null ? null : mapIncident(row);
 }
 
-async function loadTaskById(client: PoolClient, incidentId: string, taskId: string): Promise<IncidentTask | null> {
+async function loadTaskById(client: PoolClient, incidentId: string, taskId: string, tenantId: string): Promise<IncidentTask | null> {
   const result = await client.query<TaskRow>(
     `
     SELECT *
     FROM tasks
     WHERE id = $1
       AND incident_id = $2
+      AND tenant_id = $3
     LIMIT 1
     `,
-    [taskId, incidentId]
+    [taskId, incidentId, tenantId]
   );
 
   const row = getSingleRow(result.rows);
@@ -278,7 +280,7 @@ export class PostgresIncidentRepository implements IncidentRepository {
       );
 
       await replaceIncidentServices(client, incidentId, input.tenantId, uniqueServices(input.impactedServices));
-      const incident = await loadIncidentWithServices(client, incidentId);
+      const incident = await loadIncidentWithServices(client, incidentId, input.tenantId);
 
       if (incident === null) {
         throw new Error('Failed to create incident.');
@@ -292,13 +294,13 @@ export class PostgresIncidentRepository implements IncidentRepository {
     return withTransaction(this.pool, async (client) => {
       await setContext(client, input.tenantId, input.userId);
 
-      const parameters: Array<Date | string | number> = [input.limit + 1];
-      let whereClause = 'TRUE';
+      const parameters: Array<Date | string | number> = [input.limit + 1, input.tenantId];
+      let whereClause = 'i.tenant_id = $2';
 
       if (input.after !== undefined) {
         parameters.push(input.after.createdAt);
         parameters.push(input.after.id);
-        whereClause = '(i.created_at, i.id) < ($2::timestamptz, $3::uuid)';
+        whereClause = `${whereClause} AND (i.created_at, i.id) < ($3::timestamptz, $4::uuid)`;
       }
 
       const result = await client.query<IncidentWithServicesRow>(
@@ -328,7 +330,7 @@ export class PostgresIncidentRepository implements IncidentRepository {
   public async findIncidentById(input: FindIncidentInput): Promise<Incident | null> {
     return withTransaction(this.pool, async (client) => {
       await setContext(client, input.tenantId, input.userId);
-      return loadIncidentWithServices(client, input.incidentId);
+      return loadIncidentWithServices(client, input.incidentId, input.tenantId);
     });
   }
 
@@ -336,7 +338,7 @@ export class PostgresIncidentRepository implements IncidentRepository {
     return withTransaction(this.pool, async (client) => {
       await setContext(client, input.tenantId, input.userId);
 
-      const currentIncident = await loadIncidentWithServices(client, input.incidentId);
+      const currentIncident = await loadIncidentWithServices(client, input.incidentId, input.tenantId);
       if (currentIncident === null) {
         return null;
       }
@@ -357,6 +359,7 @@ export class PostgresIncidentRepository implements IncidentRepository {
             end_time = $6,
             updated_at = $7
         WHERE id = $1
+          AND tenant_id = $8
         `,
         [
           input.incidentId,
@@ -365,7 +368,8 @@ export class PostgresIncidentRepository implements IncidentRepository {
           nextSeverity,
           nextStatus,
           nextEndTime,
-          input.updatedAt
+          input.updatedAt,
+          input.tenantId
         ]
       );
 
@@ -373,7 +377,7 @@ export class PostgresIncidentRepository implements IncidentRepository {
         await replaceIncidentServices(client, input.incidentId, input.tenantId, uniqueServices(input.impactedServices));
       }
 
-      return loadIncidentWithServices(client, input.incidentId);
+      return loadIncidentWithServices(client, input.incidentId, input.tenantId);
     });
   }
 
@@ -425,9 +429,10 @@ export class PostgresIncidentRepository implements IncidentRepository {
         SELECT *
         FROM timeline_events
         WHERE incident_id = $1
+          AND tenant_id = $2
         ORDER BY event_time ASC, id ASC
         `,
-        [input.incidentId]
+        [input.incidentId, input.tenantId]
       );
 
       return result.rows.map(mapTimelineEvent);
@@ -480,7 +485,7 @@ export class PostgresIncidentRepository implements IncidentRepository {
   public async findTaskById(input: FindTaskInput): Promise<IncidentTask | null> {
     return withTransaction(this.pool, async (client) => {
       await setContext(client, input.tenantId, input.userId);
-      return loadTaskById(client, input.incidentId, input.taskId);
+      return loadTaskById(client, input.incidentId, input.taskId, input.tenantId);
     });
   }
 
@@ -488,7 +493,7 @@ export class PostgresIncidentRepository implements IncidentRepository {
     return withTransaction(this.pool, async (client) => {
       await setContext(client, input.tenantId, input.userId);
 
-      const existing = await loadTaskById(client, input.incidentId, input.taskId);
+      const existing = await loadTaskById(client, input.incidentId, input.taskId, input.tenantId);
       if (existing === null) {
         return null;
       }
@@ -510,6 +515,7 @@ export class PostgresIncidentRepository implements IncidentRepository {
             updated_at = $7
         WHERE id = $1
           AND incident_id = $8
+          AND tenant_id = $9
         RETURNING *
         `,
         [
@@ -520,7 +526,8 @@ export class PostgresIncidentRepository implements IncidentRepository {
           nextAssignee,
           nextDueAt,
           input.updatedAt,
-          input.incidentId
+          input.incidentId,
+          input.tenantId
         ]
       );
 
@@ -538,9 +545,10 @@ export class PostgresIncidentRepository implements IncidentRepository {
         SELECT *
         FROM tasks
         WHERE incident_id = $1
+          AND tenant_id = $2
         ORDER BY created_at DESC, id DESC
         `,
-        [input.incidentId]
+        [input.incidentId, input.tenantId]
       );
 
       return result.rows.map(mapTask);
@@ -595,9 +603,10 @@ export class PostgresIncidentRepository implements IncidentRepository {
         SELECT *
         FROM status_updates
         WHERE incident_id = $1
+          AND tenant_id = $2
         ORDER BY published_at DESC, id DESC
         `,
-        [input.incidentId]
+        [input.incidentId, input.tenantId]
       );
 
       return result.rows.map(mapStatusUpdate);

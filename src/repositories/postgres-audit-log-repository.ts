@@ -104,13 +104,13 @@ export class PostgresAuditLogRepository implements AuditLogRepository {
       await client.query('BEGIN');
       await setContext(client, input.tenantId, input.userId);
 
-      const parameters: Array<Date | number | string> = [input.limit + 1];
-      let whereClause = 'TRUE';
+      const parameters: Array<Date | number | string> = [input.limit + 1, input.tenantId];
+      let whereClause = 'tenant_id = $2';
 
       if (input.after !== undefined) {
         parameters.push(input.after.createdAt);
         parameters.push(input.after.id);
-        whereClause = '(created_at, id) < ($2::timestamptz, $3::uuid)';
+        whereClause = `${whereClause} AND (created_at, id) < ($3::timestamptz, $4::uuid)`;
       }
 
       const result = await client.query<AuditLogRow>(
