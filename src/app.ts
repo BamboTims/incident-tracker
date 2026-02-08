@@ -107,6 +107,11 @@ export async function createApp(
   const app = express();
   const publicRoot = path.resolve(process.cwd(), "public");
 
+  if (env.NODE_ENV === "production") {
+    // Required behind Render/other reverse proxies so secure session cookies are set correctly.
+    app.set("trust proxy", 1);
+  }
+
   let pgPool: Pool | null = null;
   const getPool = (): Pool => {
     if (pgPool !== null) {

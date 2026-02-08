@@ -195,6 +195,33 @@ describe('auth integration', () => {
     expect((response.body as ErrorResponse).code).toBe('CSRF_TOKEN_INVALID');
   });
 
+  it('sets secure session cookie behind trusted proxy in production', async () => {
+    await runtime.close();
+    runtime = await createTestRuntime({
+      envOverrides: {
+        NODE_ENV: 'production',
+        SESSION_COOKIE_SECURE: true
+      }
+    });
+
+    const response = await request(runtime.app)
+      .get('/v1/auth/me')
+      .set('x-forwarded-proto', 'https');
+
+    expect(response.status).toBe(200);
+    const setCookieHeader = response.headers['set-cookie'];
+    const cookies = Array.isArray(setCookieHeader)
+      ? setCookieHeader
+      : typeof setCookieHeader === 'string'
+        ? [setCookieHeader]
+        : [];
+
+    expect(cookies.length).toBeGreaterThan(0);
+    const cookieText = cookies.join(';');
+    expect(cookieText).toContain('incident_tracker_sid=');
+    expect(cookieText).toContain('Secure');
+  });
+
   it('resets password with a valid token and rejects invalid tokens', async () => {
     await seedUser(runtime, 'reset@example.com', 'ValidPassword123!');
     const csrfToken = await getCsrfToken(agent);

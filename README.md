@@ -161,3 +161,4 @@ Notes:
 - Build command compiles TypeScript.
 - `preDeployCommand` runs `pnpm db:migrate` before each deploy.
 - Health check uses `GET /health`.
+- In production, the app trusts one reverse-proxy hop so secure session cookies work on Render.
