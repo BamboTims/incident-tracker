@@ -1,0 +1,254 @@
+openapi: 3.1.0
+info:
+  title: Incident Tracker API
+  version: 0.1.0
+  description: Multi-tenant incident tracker authentication and session API.
+servers:
+  - url: http://localhost:3000
+paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service is healthy.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    const: ok
+                required: [status]
+
+  /v1/auth/me:
+    get:
+      summary: Get current session state
+      operationId: getAuthState
+      responses:
+        '200':
+          description: Session state.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/AuthStateAnonymousResponse'
+                  - $ref: '#/components/schemas/AuthStateAuthenticatedResponse'
+
+  /v1/auth/login:
+    post:
+      summary: Login with email and password
+      operationId: login
+      security:
+        - CsrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthStateAuthenticatedResponse'
+        '401':
+          description: Invalid credentials.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: CSRF validation failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '423':
+          description: Account temporarily locked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/auth/logout:
+    post:
+      summary: Logout and clear session
+      operationId: logout
+      security:
+        - SessionCookie: []
+          CsrfToken: []
+      responses:
+        '204':
+          description: Logged out.
+        '403':
+          description: CSRF validation failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/auth/password/forgot:
+    post:
+      summary: Request password reset
+      operationId: forgotPassword
+      security:
+        - CsrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+      responses:
+        '202':
+          description: Password reset accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForgotPasswordResponse'
+        '403':
+          description: CSRF validation failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/auth/password/reset:
+    post:
+      summary: Reset password using token
+      operationId: resetPassword
+      security:
+        - CsrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+      responses:
+        '204':
+          description: Password reset successful.
+        '400':
+          description: Invalid reset token or weak password.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: CSRF validation failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    SessionCookie:
+      type: apiKey
+      in: cookie
+      name: incident_tracker_sid
+    CsrfToken:
+      type: apiKey
+      in: header
+      name: x-csrf-token
+
+  schemas:
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 1
+
+    ForgotPasswordRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+
+    ForgotPasswordResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          const: AUTH_PASSWORD_RESET_REQUESTED
+        message:
+          type: string
+        resetToken:
+          type: string
+          description: Exposed in test/dev only when AUTH_EXPOSE_RESET_TOKEN=true.
+
+    ResetPasswordRequest:
+      type: object
+      required: [token, newPassword]
+      properties:
+        token:
+          type: string
+          minLength: 16
+        newPassword:
+          type: string
+          minLength: 12
+
+    AuthenticatedUser:
+      type: object
+      required: [id, email, passwordUpdatedAt, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        passwordUpdatedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    AuthStateAnonymousResponse:
+      type: object
+      required: [authenticated, csrfToken]
+      properties:
+        authenticated:
+          type: boolean
+          const: false
+        csrfToken:
+          type: string
+
+    AuthStateAuthenticatedResponse:
+      type: object
+      required: [authenticated, user, csrfToken]
+      properties:
+        authenticated:
+          type: boolean
+          const: true
+        user:
+          $ref: '#/components/schemas/AuthenticatedUser'
+        csrfToken:
+          type: string
+
+    ErrorResponse:
+      type: object
+      required: [code, message, traceId]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        traceId:
+          type: string
+        details:
+          description: Optional structured metadata for debugging and validation.
