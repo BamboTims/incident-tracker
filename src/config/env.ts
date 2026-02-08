@@ -12,7 +12,9 @@ const envSchema = z.object({
   AUTH_LOCKOUT_ATTEMPTS: z.coerce.number().int().positive().default(5),
   AUTH_LOCKOUT_SECONDS: z.coerce.number().int().positive().default(900),
   AUTH_RESET_TOKEN_TTL_MINUTES: z.coerce.number().int().positive().default(30),
-  AUTH_EXPOSE_RESET_TOKEN: z.coerce.boolean().default(false)
+  AUTH_EXPOSE_RESET_TOKEN: z.coerce.boolean().default(false),
+  INVITE_TOKEN_TTL_HOURS: z.coerce.number().int().positive().default(72),
+  INVITES_EXPOSE_TOKEN: z.coerce.boolean().default(false)
 });
 
 export type Env = z.infer<typeof envSchema>;

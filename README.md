@@ -9,8 +9,11 @@ Production-minded multi-tenant incident tracker backend scaffold with:
 - Login lockout and password reset token flow
 - Redis-backed session store (memory store in tests)
 - PostgreSQL auth repository when `DATABASE_URL` is set (in-memory fallback otherwise)
+- Tenant, membership, and invitation workflows
+- PostgreSQL RLS policies for tenant-scoped membership and invite tables
+- Centralized RBAC policy engine (`authorize(action, resource, ctx)`)
 - OpenAPI 3.1 contract in `openapi.yaml`
-- Integration tests for auth/session security behavior
+- Integration tests for auth/session and tenancy flows
 
 ## Primary auth model
 
@@ -58,6 +61,14 @@ pnpm dev
 
 Use `GET /v1/auth/me` first to establish a session and get `csrfToken`.
 Send `x-csrf-token` for all state-changing endpoints.
+
+## Tenancy endpoints
+
+- `GET /v1/tenants`
+- `POST /v1/tenants`
+- `POST /v1/tenants/:tenantId/switch`
+- `POST /v1/tenants/:tenantId/invites`
+- `POST /v1/tenants/invites/accept`
 
 ## Security notes
 

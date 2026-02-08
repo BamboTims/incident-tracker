@@ -10,6 +10,7 @@ export async function createTestRuntime(): Promise<AppRuntime> {
       SESSION_STORE: 'memory',
       SESSION_SECRET: 'test-session-secret-value',
       AUTH_EXPOSE_RESET_TOKEN: true,
+      INVITES_EXPOSE_TOKEN: true,
       AUTH_LOCKOUT_ATTEMPTS: 3,
       AUTH_LOCKOUT_SECONDS: 60,
       SESSION_COOKIE_SECURE: false

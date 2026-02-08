@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: Incident Tracker API
-  version: 0.1.0
-  description: Multi-tenant incident tracker authentication and session API.
+  version: 0.2.0
+  description: Multi-tenant incident tracker authentication, tenancy, and session API.
 servers:
   - url: http://localhost:3000
 paths:
@@ -146,7 +146,188 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /v1/tenants:
+    get:
+      summary: List tenants for the authenticated user
+      operationId: listTenants
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Tenant memberships for the current user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantListResponse'
+        '401':
+          description: Authentication required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      summary: Create a tenant and owner membership
+      operationId: createTenant
+      security:
+        - SessionCookie: []
+          CsrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTenantRequest'
+      responses:
+        '201':
+          description: Tenant created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateTenantResponse'
+        '400':
+          description: Invalid tenant request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: CSRF validation failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/tenants/invites/accept:
+    post:
+      summary: Accept a tenant invite token
+      operationId: acceptTenantInvite
+      security:
+        - SessionCookie: []
+          CsrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcceptTenantInviteRequest'
+      responses:
+        '200':
+          description: Invite accepted and membership created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcceptTenantInviteResponse'
+        '400':
+          description: Invite token invalid or expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: CSRF validation failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/tenants/{tenantId}/switch:
+    post:
+      summary: Switch active tenant in session
+      operationId: switchTenant
+      security:
+        - SessionCookie: []
+          CsrfToken: []
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      responses:
+        '200':
+          description: Active tenant switched.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SwitchTenantResponse'
+        '401':
+          description: Authentication required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: CSRF validation failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Tenant not found for user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/tenants/{tenantId}/invites:
+    post:
+      summary: Create a tenant invitation
+      operationId: createTenantInvite
+      security:
+        - SessionCookie: []
+          CsrfToken: []
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTenantInviteRequest'
+      responses:
+        '201':
+          description: Invite created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateTenantInviteResponse'
+        '401':
+          description: Authentication required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Permission denied or CSRF validation failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Tenant not found for user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
+  parameters:
+    TenantId:
+      name: tenantId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
   securitySchemes:
     SessionCookie:
       type: apiKey
@@ -200,6 +381,183 @@ components:
         newPassword:
           type: string
           minLength: 12
+
+    CreateTenantRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 3
+          maxLength: 80
+
+    CreateTenantInviteRequest:
+      type: object
+      required: [email, role]
+      properties:
+        email:
+          type: string
+          format: email
+        role:
+          $ref: '#/components/schemas/OrgRole'
+
+    AcceptTenantInviteRequest:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          minLength: 16
+
+    OrgRole:
+      type: string
+      enum: [Owner, Admin, Responder, Viewer, Billing]
+
+    Tenant:
+      type: object
+      required: [id, name, slug, createdByUserId, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        createdByUserId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Membership:
+      type: object
+      required: [id, tenantId, userId, role, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        role:
+          $ref: '#/components/schemas/OrgRole'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    TenantListItem:
+      type: object
+      required: [tenant, membership]
+      properties:
+        tenant:
+          $ref: '#/components/schemas/Tenant'
+        membership:
+          type: object
+          required: [id, role]
+          properties:
+            id:
+              type: string
+              format: uuid
+            role:
+              $ref: '#/components/schemas/OrgRole'
+
+    TenantListResponse:
+      type: object
+      required: [activeTenantId, tenants, csrfToken]
+      properties:
+        activeTenantId:
+          oneOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        tenants:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenantListItem'
+        csrfToken:
+          type: string
+
+    CreateTenantResponse:
+      type: object
+      required: [tenant, membership, activeTenantId, csrfToken]
+      properties:
+        tenant:
+          $ref: '#/components/schemas/Tenant'
+        membership:
+          $ref: '#/components/schemas/Membership'
+        activeTenantId:
+          type: string
+          format: uuid
+        csrfToken:
+          type: string
+
+    SwitchTenantResponse:
+      type: object
+      required: [activeTenantId, membership, csrfToken]
+      properties:
+        activeTenantId:
+          type: string
+          format: uuid
+        membership:
+          $ref: '#/components/schemas/Membership'
+        csrfToken:
+          type: string
+
+    CreateTenantInviteResponse:
+      type: object
+      required: [invite, csrfToken]
+      properties:
+        invite:
+          type: object
+          required: [id, tenantId, email, role, expiresAt, createdAt]
+          properties:
+            id:
+              type: string
+              format: uuid
+            tenantId:
+              type: string
+              format: uuid
+            email:
+              type: string
+              format: email
+            role:
+              $ref: '#/components/schemas/OrgRole'
+            expiresAt:
+              type: string
+              format: date-time
+            createdAt:
+              type: string
+              format: date-time
+        inviteToken:
+          type: string
+          description: Exposed only when INVITES_EXPOSE_TOKEN=true.
+        csrfToken:
+          type: string
+
+    AcceptTenantInviteResponse:
+      type: object
+      required: [tenant, membership, activeTenantId, csrfToken]
+      properties:
+        tenant:
+          $ref: '#/components/schemas/Tenant'
+        membership:
+          $ref: '#/components/schemas/Membership'
+        activeTenantId:
+          type: string
+          format: uuid
+        csrfToken:
+          type: string
 
     AuthenticatedUser:
       type: object

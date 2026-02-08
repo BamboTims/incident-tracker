@@ -9,21 +9,28 @@ import { errorHandler } from './errors/error-handler.js';
 import { csrfProtection } from './http/middlewares/csrf.js';
 import { attachTraceId } from './http/middlewares/trace-id.js';
 import { createAuthRoutes } from './http/routes/auth-routes.js';
+import { createTenantRoutes } from './http/routes/tenant-routes.js';
 import type { AuthRepository } from './repositories/auth-repository.js';
 import { InMemoryAuthRepository } from './repositories/in-memory-auth-repository.js';
 import { PostgresAuthRepository } from './repositories/postgres-auth-repository.js';
+import { InMemoryTenantRepository } from './repositories/in-memory-tenant-repository.js';
+import { PostgresTenantRepository } from './repositories/postgres-tenant-repository.js';
+import type { TenantRepository } from './repositories/tenant-repository.js';
 import { registerSession, type SessionRuntime } from './session/register-session.js';
 import { AuthService } from './services/auth-service.js';
+import { TenantService } from './services/tenant-service.js';
 
 export interface CreateAppOptions {
   envOverrides?: Partial<Record<keyof Env, unknown>>;
   authRepository?: AuthRepository;
+  tenantRepository?: TenantRepository;
 }
 
 export interface AppRuntime {
   app: Express;
   env: Env;
   authRepository: AuthRepository;
+  tenantRepository: TenantRepository;
   close(): Promise<void>;
 }
 
@@ -56,19 +63,41 @@ export async function createApp(options: CreateAppOptions = {}): Promise<AppRunt
   const app = express();
 
   let pgPool: Pool | null = null;
+  const getPool = (): Pool => {
+    if (pgPool !== null) {
+      return pgPool;
+    }
+
+    if (typeof env.DATABASE_URL !== 'string' || env.DATABASE_URL.length === 0) {
+      throw new Error('DATABASE_URL is not configured.');
+    }
+
+    pgPool = new Pool({ connectionString: env.DATABASE_URL });
+    return pgPool;
+  };
+
   const authRepository = options.authRepository ?? (() => {
     if (typeof env.DATABASE_URL === 'string' && env.DATABASE_URL.length > 0) {
-      pgPool = new Pool({ connectionString: env.DATABASE_URL });
-      return new PostgresAuthRepository(pgPool);
+      return new PostgresAuthRepository(getPool());
     }
 
     return new InMemoryAuthRepository();
+  })();
+  const tenantRepository = options.tenantRepository ?? (() => {
+    if (typeof env.DATABASE_URL === 'string' && env.DATABASE_URL.length > 0) {
+      return new PostgresTenantRepository(getPool());
+    }
+
+    return new InMemoryTenantRepository();
   })();
 
   const authService = new AuthService(authRepository, {
     lockoutAttempts: env.AUTH_LOCKOUT_ATTEMPTS,
     lockoutSeconds: env.AUTH_LOCKOUT_SECONDS,
     resetTokenTtlMinutes: env.AUTH_RESET_TOKEN_TTL_MINUTES
+  });
+  const tenantService = new TenantService(tenantRepository, authRepository, {
+    inviteTokenTtlHours: env.INVITE_TOKEN_TTL_HOURS
   });
 
   app.disable('x-powered-by');
@@ -84,6 +113,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<AppRunt
 
   app.use('/v1/auth/login', createAuthRateLimiter());
   app.use('/v1/auth', createAuthRoutes(authService, env));
+  app.use('/v1/tenants', createTenantRoutes(tenantService, env));
 
   app.get('/health', (_request, response) => {
     response.status(200).json({
@@ -101,6 +131,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<AppRunt
     app,
     env,
     authRepository,
+    tenantRepository,
     async close() {
       if (pgPool !== null) {
         await pgPool.end();
