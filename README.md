@@ -152,3 +152,19 @@ These management endpoints require session auth and `api_keys.manage`.
   - `pnpm test`
   - `pnpm openapi:validate`
   - Postgres service + `pnpm db:migrate` + `pnpm test:integration:postgres`
+
+## Deploy to Render
+
+This repo includes `render.yaml` for Blueprint deploys.
+
+1. Push this repo to GitHub.
+2. In Render, choose `New` -> `Blueprint` and select the repo.
+3. Confirm the `incident-tracker-api` web service from `render.yaml`.
+4. Set `DATABASE_URL` and `REDIS_URL` in Render (both are marked `sync: false`).
+5. Deploy.
+
+Notes:
+
+- Build command compiles TypeScript.
+- `preDeployCommand` runs `pnpm db:migrate` before each deploy.
+- Health check uses `GET /health`.

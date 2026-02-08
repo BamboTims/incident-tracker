@@ -1,0 +1,47 @@
+services:
+  - type: web
+    name: incident-tracker-api
+    runtime: node
+    plan: starter
+    autoDeploy: true
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build
+    preDeployCommand: corepack enable && pnpm db:migrate
+    startCommand: corepack enable && pnpm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 22
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: SESSION_COOKIE_NAME
+        value: incident_tracker_sid
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+      - key: SESSION_STORE
+        value: redis
+      - key: AUTH_LOCKOUT_ATTEMPTS
+        value: "5"
+      - key: AUTH_LOCKOUT_SECONDS
+        value: "900"
+      - key: AUTH_RESET_TOKEN_TTL_MINUTES
+        value: "30"
+      - key: AUTH_EXPOSE_RESET_TOKEN
+        value: "false"
+      - key: INVITE_TOKEN_TTL_HOURS
+        value: "72"
+      - key: INVITES_EXPOSE_TOKEN
+        value: "false"
+      - key: USAGE_DAILY_WRITE_LIMIT
+        value: "5000"
+      - key: OTEL_ENABLED
+        value: "false"
+      - key: OTEL_SERVICE_NAME
+        value: incident-tracker-api
+      - key: OTEL_METRIC_EXPORT_INTERVAL_MS
+        value: "30000"
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
