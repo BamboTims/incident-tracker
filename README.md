@@ -137,14 +137,6 @@ These management endpoints require session auth and `api_keys.manage`.
 }
 ```
 
-## Docs
-
-- `TENANCY.md`
-- `PERMISSIONS.md`
-- `openapi.yaml`
-- `Agent.md`
-- `requirements.md`
-
 ## CI
 
 - GitHub Actions workflow (`.github/workflows/ci.yml`) runs:
