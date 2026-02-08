@@ -1,6 +1,7 @@
 import express, { type Express } from "express";
 import helmet from "helmet";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
+import path from "node:path";
 import { Pool } from "pg";
 
 import { getEnv, type Env } from "./config/env.js";
@@ -104,6 +105,7 @@ export async function createApp(
 ): Promise<AppRuntime> {
   const env = getEnv(options.envOverrides);
   const app = express();
+  const publicRoot = path.resolve(process.cwd(), "public");
 
   let pgPool: Pool | null = null;
   const getPool = (): Pool => {
@@ -233,6 +235,14 @@ export async function createApp(
   );
   app.use("/v1/audit-logs", createAuditLogRoutes(auditLogQueryService));
   app.use("/v1/usage", createUsageRoutes(usageService));
+
+  app.use("/app/assets", express.static(path.join(publicRoot, "assets")));
+  app.get("/", (_request, response) => {
+    response.redirect("/app");
+  });
+  app.get("/app", (_request, response) => {
+    response.sendFile(path.join(publicRoot, "index.html"));
+  });
 
   app.get("/health", (_request, response) => {
     response.status(200).json({

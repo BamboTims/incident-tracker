@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Incident Tracker Views</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/app/assets/styles.css" />
+  </head>
+  <body>
+    <div class="background-glow" aria-hidden="true"></div>
+    <main class="layout">
+      <header class="hero">
+        <p class="eyebrow">Incident Tracker</p>
+        <h1>Operator Views</h1>
+        <p class="subtitle">
+          Session auth + tenancy + incidents in one browser workflow.
+        </p>
+        <div id="session-pill" class="pill">Loading session...</div>
+      </header>
+
+      <section class="panel stagger">
+        <h2>Auth</h2>
+        <form id="login-form" class="stack">
+          <label>
+            Email
+            <input id="login-email" type="email" autocomplete="email" required />
+          </label>
+          <label>
+            Password
+            <input
+              id="login-password"
+              type="password"
+              autocomplete="current-password"
+              required
+            />
+          </label>
+          <div class="row">
+            <button type="submit">Login</button>
+            <button id="logout-button" type="button" class="muted">
+              Logout
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel stagger">
+        <h2>Tenants</h2>
+        <form id="tenant-form" class="stack">
+          <label>
+            Tenant name
+            <input id="tenant-name" type="text" minlength="3" maxlength="80" required />
+          </label>
+          <button type="submit">Create Tenant</button>
+        </form>
+        <div class="row">
+          <button id="refresh-tenants" type="button" class="muted">
+            Refresh Tenants
+          </button>
+        </div>
+        <ul id="tenant-list" class="list"></ul>
+      </section>
+
+      <section class="panel stagger">
+        <h2>Incidents</h2>
+        <form id="incident-form" class="stack">
+          <label>
+            Title
+            <input id="incident-title" type="text" minlength="3" maxlength="200" required />
+          </label>
+          <label>
+            Severity
+            <select id="incident-severity" required>
+              <option value="SEV1">SEV1</option>
+              <option value="SEV2">SEV2</option>
+              <option value="SEV3" selected>SEV3</option>
+              <option value="SEV4">SEV4</option>
+            </select>
+          </label>
+          <label>
+            Description
+            <textarea id="incident-description" rows="3" maxlength="4000"></textarea>
+          </label>
+          <button type="submit">Create Incident</button>
+        </form>
+        <div class="row">
+          <button id="refresh-incidents" type="button" class="muted">
+            Refresh Incidents
+          </button>
+        </div>
+        <ul id="incident-list" class="list"></ul>
+      </section>
+
+      <section class="panel logs stagger">
+        <h2>Activity</h2>
+        <pre id="activity-log" class="activity"></pre>
+      </section>
+    </main>
+
+    <script type="module" src="/app/assets/app.js"></script>
+  </body>
+</html>
