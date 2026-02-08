@@ -8,12 +8,16 @@ Production-minded multi-tenant incident tracker backend scaffold with:
 - Argon2id password hashing
 - Login lockout and password reset token flow
 - Redis-backed session store (memory store in tests)
-- PostgreSQL auth repository when `DATABASE_URL` is set (in-memory fallback otherwise)
+- PostgreSQL repositories for auth, tenancy, incidents, audit logs, API keys, and usage
 - Tenant, membership, and invitation workflows
 - PostgreSQL RLS policies for tenant-scoped membership and invite tables
 - Centralized RBAC policy engine (`authorize(action, resource, ctx)`)
+- Append-only audit logging for sensitive auth/tenant/incident mutations
+- Service accounts + scoped API keys (`read` / `write`)
+- Usage metering and daily write quota enforcement
+- OpenTelemetry hooks for HTTP/DB traces and metrics
 - OpenAPI 3.1 contract in `openapi.yaml`
-- Integration tests for auth/session and tenancy flows
+- Integration tests for auth/session, tenancy, incidents, API keys, and quota
 
 ## Primary auth model
 
@@ -49,7 +53,15 @@ pnpm dev
 - `pnpm typecheck`
 - `pnpm test`
 - `pnpm test:integration`
+- `pnpm test:integration:postgres`
+- `pnpm db:migrate`
 - `pnpm openapi:validate`
+
+## Authorization semantics
+
+- ID-based endpoints are leak-resistant by default:
+  - `404` when an object is missing or inaccessible in active tenant context
+  - `403` only when object existence is established and permission is denied
 
 ## Auth endpoints
 
@@ -61,6 +73,7 @@ pnpm dev
 
 Use `GET /v1/auth/me` first to establish a session and get `csrfToken`.
 Send `x-csrf-token` for all state-changing endpoints.
+For API-key-authenticated automation requests, send `x-api-key` and skip CSRF.
 
 ## Tenancy endpoints
 
@@ -70,12 +83,48 @@ Send `x-csrf-token` for all state-changing endpoints.
 - `POST /v1/tenants/:tenantId/invites`
 - `POST /v1/tenants/invites/accept`
 
+## Incident endpoints
+
+- `GET /v1/incidents`
+- `POST /v1/incidents`
+- `GET /v1/incidents/:incidentId`
+- `PATCH /v1/incidents/:incidentId`
+- `GET /v1/incidents/:incidentId/timeline-events`
+- `POST /v1/incidents/:incidentId/timeline-events`
+- `GET /v1/incidents/:incidentId/tasks`
+- `POST /v1/incidents/:incidentId/tasks`
+- `PATCH /v1/incidents/:incidentId/tasks/:taskId`
+- `GET /v1/incidents/:incidentId/status-updates`
+- `POST /v1/incidents/:incidentId/status-updates`
+
+Incident routes accept either:
+
+- Session cookie auth (CSRF required on mutating requests)
+- API key auth via `x-api-key` (scope-checked; CSRF not required)
+
+## API key management endpoints
+
+- `GET /v1/tenants/:tenantId/service-accounts`
+- `POST /v1/tenants/:tenantId/service-accounts`
+- `GET /v1/tenants/:tenantId/api-keys`
+- `POST /v1/tenants/:tenantId/api-keys`
+- `POST /v1/tenants/:tenantId/api-keys/:apiKeyId/revoke`
+
+These management endpoints require session auth and `api_keys.manage`.
+
+## Platform endpoints
+
+- `GET /v1/audit-logs` (requires `audit_log.read`)
+- `GET /v1/usage` (requires `billing.read`)
+
 ## Security notes
 
 - Session cookies are `httpOnly` and `sameSite=lax`.
 - `secure` cookies are enabled in production.
 - Passwords are hashed with Argon2id.
 - Login attempts are lockout-protected.
+- Sensitive actions write audit log entries (`audit_log_events` in Postgres).
+- Write-heavy incident mutations are quota-protected and return `429 QUOTA_EXCEEDED` when over limit.
 - Error format is consistent:
 
 ```json
@@ -94,3 +143,12 @@ Send `x-csrf-token` for all state-changing endpoints.
 - `openapi.yaml`
 - `Agent.md`
 - `requirements.md`
+
+## CI
+
+- GitHub Actions workflow (`.github/workflows/ci.yml`) runs:
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm openapi:validate`
+  - Postgres service + `pnpm db:migrate` + `pnpm test:integration:postgres`

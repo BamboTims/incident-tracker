@@ -1,8 +1,13 @@
 import 'dotenv/config';
 
+import { getEnv } from './config/env.js';
 import { createApp } from './app.js';
+import { startTelemetry, stopTelemetry } from './telemetry/runtime.js';
 
 async function main(): Promise<void> {
+  const env = getEnv();
+  await startTelemetry(env);
+
   const runtime = await createApp();
 
   const server = runtime.app.listen(runtime.env.PORT, () => {
@@ -13,6 +18,7 @@ async function main(): Promise<void> {
     server.close(() => {
       void runtime
         .close()
+        .then(() => stopTelemetry())
         .then(() => {
           process.exit(0);
         })

@@ -33,6 +33,11 @@ export function issueCsrfToken(request: Request): string {
 }
 
 export function csrfProtection(request: Request, _response: Response, next: NextFunction): void {
+  if (request.authContext?.authType === 'api_key') {
+    next();
+    return;
+  }
+
   if (SAFE_METHODS.has(request.method)) {
     issueCsrfToken(request);
     next();

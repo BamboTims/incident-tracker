@@ -1,10 +1,15 @@
 openapi: 3.1.0
 info:
   title: Incident Tracker API
-  version: 0.2.0
-  description: Multi-tenant incident tracker authentication, tenancy, and session API.
+  version: 0.3.0
+  description: >-
+    Multi-tenant incident tracker API with session auth, tenancy, and incident workflows.
+    ID-based routes return 404 for objects that are missing or inaccessible in the active
+    tenant context, and return 403 only when object existence is established but permission
+    is denied.
 servers:
   - url: http://localhost:3000
+
 paths:
   /health:
     get:
@@ -17,11 +22,11 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [status]
                 properties:
                   status:
                     type: string
                     const: ok
-                required: [status]
 
   /v1/auth/me:
     get:
@@ -185,19 +190,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/CreateTenantResponse'
         '400':
-          description: Invalid tenant request.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '401':
-          description: Authentication required.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '403':
-          description: CSRF validation failed.
+          description: Invalid request.
           content:
             application/json:
               schema:
@@ -218,25 +211,13 @@ paths:
               $ref: '#/components/schemas/AcceptTenantInviteRequest'
       responses:
         '200':
-          description: Invite accepted and membership created.
+          description: Invite accepted.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AcceptTenantInviteResponse'
         '400':
           description: Invite token invalid or expired.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '401':
-          description: Authentication required.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '403':
-          description: CSRF validation failed.
           content:
             application/json:
               schema:
@@ -258,18 +239,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SwitchTenantResponse'
-        '401':
-          description: Authentication required.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '403':
-          description: CSRF validation failed.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Tenant not found for user.
           content:
@@ -299,14 +268,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CreateTenantInviteResponse'
-        '401':
-          description: Authentication required.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: Permission denied or CSRF validation failed.
+          description: Permission denied.
           content:
             application/json:
               schema:
@@ -318,10 +281,677 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /v1/tenants/{tenantId}/service-accounts:
+    get:
+      summary: List service accounts for a tenant
+      operationId: listServiceAccounts
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      responses:
+        '200':
+          description: Service accounts.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceAccountListResponse'
+        '403':
+          description: Permission denied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Tenant not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      summary: Create a service account
+      operationId: createServiceAccount
+      security:
+        - SessionCookie: []
+          CsrfToken: []
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateServiceAccountRequest'
+      responses:
+        '201':
+          description: Service account created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceAccountItemResponse'
+        '403':
+          description: Permission denied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Tenant not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/tenants/{tenantId}/api-keys:
+    get:
+      summary: List API keys for a tenant
+      operationId: listApiKeys
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      responses:
+        '200':
+          description: API keys.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyListResponse'
+        '403':
+          description: Permission denied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Tenant not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      summary: Create an API key
+      operationId: createApiKey
+      security:
+        - SessionCookie: []
+          CsrfToken: []
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateApiKeyRequest'
+      responses:
+        '201':
+          description: API key created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateApiKeyResponse'
+        '403':
+          description: Permission denied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Tenant or service account not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/tenants/{tenantId}/api-keys/{apiKeyId}/revoke:
+    post:
+      summary: Revoke an API key
+      operationId: revokeApiKey
+      security:
+        - SessionCookie: []
+          CsrfToken: []
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/ApiKeyId'
+      responses:
+        '200':
+          description: API key revoked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyItemResponse'
+        '403':
+          description: Permission denied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: API key not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/audit-logs:
+    get:
+      summary: List tenant audit logs
+      operationId: listAuditLogs
+      security:
+        - SessionCookie: []
+        - ApiKeyHeader: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Audit log page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogListResponse'
+        '400':
+          description: Invalid tenant context or cursor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Permission denied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Tenant not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/usage:
+    get:
+      summary: Read tenant usage and quota summary
+      operationId: getUsageSummary
+      security:
+        - SessionCookie: []
+        - ApiKeyHeader: []
+      responses:
+        '200':
+          description: Usage summary.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsageSummaryResponse'
+        '400':
+          description: Invalid tenant context.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Permission denied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Tenant not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/incidents:
+    get:
+      summary: List incidents for active tenant
+      operationId: listIncidents
+      security:
+        - SessionCookie: []
+        - ApiKeyHeader: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Incident page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentListResponse'
+        '400':
+          description: Invalid tenant context or pagination cursor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Permission denied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Active tenant membership not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      summary: Create incident
+      operationId: createIncident
+      security:
+        - SessionCookie: []
+          CsrfToken: []
+        - ApiKeyHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateIncidentRequest'
+      responses:
+        '201':
+          description: Incident created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentItemResponse'
+        '400':
+          description: Invalid tenant context.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Permission denied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Tenant write quota exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Active tenant membership not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/incidents/{incidentId}:
+    get:
+      summary: Get incident by ID
+      operationId: getIncident
+      security:
+        - SessionCookie: []
+        - ApiKeyHeader: []
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+      responses:
+        '200':
+          description: Incident details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentItemResponse'
+        '403':
+          description: Permission denied after incident lookup.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Incident not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      summary: Update incident fields
+      operationId: updateIncident
+      security:
+        - SessionCookie: []
+          CsrfToken: []
+        - ApiKeyHeader: []
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateIncidentRequest'
+      responses:
+        '200':
+          description: Incident updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentItemResponse'
+        '400':
+          description: Invalid update payload or transition.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Permission denied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Tenant write quota exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Incident not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/incidents/{incidentId}/timeline-events:
+    get:
+      summary: List incident timeline events
+      operationId: listIncidentTimelineEvents
+      security:
+        - SessionCookie: []
+        - ApiKeyHeader: []
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+      responses:
+        '200':
+          description: Timeline events.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimelineEventsResponse'
+        '403':
+          description: Permission denied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Incident not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      summary: Add timeline event
+      operationId: createIncidentTimelineEvent
+      security:
+        - SessionCookie: []
+          CsrfToken: []
+        - ApiKeyHeader: []
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTimelineEventRequest'
+      responses:
+        '201':
+          description: Timeline event created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimelineEventItemResponse'
+        '403':
+          description: Permission denied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Tenant write quota exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Incident not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/incidents/{incidentId}/tasks:
+    get:
+      summary: List incident tasks
+      operationId: listIncidentTasks
+      security:
+        - SessionCookie: []
+        - ApiKeyHeader: []
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+      responses:
+        '200':
+          description: Incident tasks.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentTasksResponse'
+        '403':
+          description: Permission denied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Incident not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      summary: Create incident task
+      operationId: createIncidentTask
+      security:
+        - SessionCookie: []
+          CsrfToken: []
+        - ApiKeyHeader: []
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateIncidentTaskRequest'
+      responses:
+        '201':
+          description: Task created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentTaskItemResponse'
+        '403':
+          description: Permission denied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Tenant write quota exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Incident not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/incidents/{incidentId}/tasks/{taskId}:
+    patch:
+      summary: Update incident task
+      operationId: updateIncidentTask
+      security:
+        - SessionCookie: []
+          CsrfToken: []
+        - ApiKeyHeader: []
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+        - $ref: '#/components/parameters/TaskId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateIncidentTaskRequest'
+      responses:
+        '200':
+          description: Task updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentTaskItemResponse'
+        '403':
+          description: Permission denied after task lookup.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Tenant write quota exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Incident or task not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/incidents/{incidentId}/status-updates:
+    get:
+      summary: List incident status updates
+      operationId: listIncidentStatusUpdates
+      security:
+        - SessionCookie: []
+        - ApiKeyHeader: []
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+      responses:
+        '200':
+          description: Status updates.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentStatusUpdatesResponse'
+        '403':
+          description: Permission denied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Incident not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      summary: Create incident status update
+      operationId: createIncidentStatusUpdate
+      security:
+        - SessionCookie: []
+          CsrfToken: []
+        - ApiKeyHeader: []
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateStatusUpdateRequest'
+      responses:
+        '201':
+          description: Status update created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentStatusUpdateItemResponse'
+        '403':
+          description: Permission denied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Tenant write quota exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Incident not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
   parameters:
     TenantId:
       name: tenantId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    IncidentId:
+      name: incidentId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    TaskId:
+      name: taskId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ApiKeyId:
+      name: apiKeyId
       in: path
       required: true
       schema:
@@ -337,6 +967,10 @@ components:
       type: apiKey
       in: header
       name: x-csrf-token
+    ApiKeyHeader:
+      type: apiKey
+      in: header
+      name: x-api-key
 
   schemas:
     LoginRequest:
@@ -369,7 +1003,6 @@ components:
           type: string
         resetToken:
           type: string
-          description: Exposed in test/dev only when AUTH_EXPOSE_RESET_TOKEN=true.
 
     ResetPasswordRequest:
       type: object
@@ -409,9 +1042,157 @@ components:
           type: string
           minLength: 16
 
+    CreateIncidentRequest:
+      type: object
+      required: [title, severity, startTime, impactedServices]
+      properties:
+        title:
+          type: string
+          minLength: 3
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 4000
+        severity:
+          $ref: '#/components/schemas/IncidentSeverity'
+        startTime:
+          type: string
+          format: date-time
+        impactedServices:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 100
+
+    UpdateIncidentRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 3
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 4000
+        severity:
+          $ref: '#/components/schemas/IncidentSeverity'
+        status:
+          $ref: '#/components/schemas/IncidentStatus'
+        endTime:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+        impactedServices:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 100
+
+    CreateTimelineEventRequest:
+      type: object
+      required: [eventTime, eventType, message]
+      properties:
+        eventTime:
+          type: string
+          format: date-time
+        eventType:
+          type: string
+          minLength: 2
+          maxLength: 100
+        message:
+          type: string
+          minLength: 1
+          maxLength: 4000
+
+    CreateIncidentTaskRequest:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+          minLength: 3
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 4000
+        assigneeUserId:
+          oneOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        dueAt:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+
+    UpdateIncidentTaskRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 3
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 4000
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+        assigneeUserId:
+          oneOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        dueAt:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+
+    CreateStatusUpdateRequest:
+      type: object
+      required: [audience, message, publishedAt]
+      properties:
+        audience:
+          $ref: '#/components/schemas/StatusUpdateAudience'
+        message:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        publishedAt:
+          type: string
+          format: date-time
+
     OrgRole:
       type: string
       enum: [Owner, Admin, Responder, Viewer, Billing]
+
+    IncidentSeverity:
+      type: string
+      enum: [SEV1, SEV2, SEV3, SEV4]
+
+    IncidentStatus:
+      type: string
+      enum: [declared, investigating, mitigating, monitoring, resolved, closed]
+
+    TaskStatus:
+      type: string
+      enum: [open, in_progress, completed]
+
+    StatusUpdateAudience:
+      type: string
+      enum: [internal, external]
+
+    AuthType:
+      type: string
+      enum: [session, api_key]
+
+    ApiKeyScope:
+      type: string
+      enum: [read, write]
 
     Tenant:
       type: object
@@ -455,6 +1236,195 @@ components:
         updatedAt:
           type: string
           format: date-time
+
+    Incident:
+      type: object
+      required:
+        [
+          id,
+          tenantId,
+          title,
+          description,
+          severity,
+          status,
+          startTime,
+          endTime,
+          declaredByUserId,
+          impactedServices,
+          createdAt,
+          updatedAt
+        ]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        severity:
+          $ref: '#/components/schemas/IncidentSeverity'
+        status:
+          $ref: '#/components/schemas/IncidentStatus'
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+        declaredByUserId:
+          type: string
+          format: uuid
+        impactedServices:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    TimelineEvent:
+      type: object
+      required: [id, tenantId, incidentId, eventTime, eventType, message, createdByUserId, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        incidentId:
+          type: string
+          format: uuid
+        eventTime:
+          type: string
+          format: date-time
+        eventType:
+          type: string
+        message:
+          type: string
+        createdByUserId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+
+    IncidentTask:
+      type: object
+      required:
+        [id, tenantId, incidentId, title, description, status, assigneeUserId, dueAt, createdByUserId, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        incidentId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+        assigneeUserId:
+          oneOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        dueAt:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+        createdByUserId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    IncidentStatusUpdate:
+      type: object
+      required: [id, tenantId, incidentId, audience, message, createdByUserId, publishedAt, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        incidentId:
+          type: string
+          format: uuid
+        audience:
+          $ref: '#/components/schemas/StatusUpdateAudience'
+        message:
+          type: string
+        createdByUserId:
+          type: string
+          format: uuid
+        publishedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    AuthenticatedUser:
+      type: object
+      required: [id, email, passwordUpdatedAt, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        passwordUpdatedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    AuthStateAnonymousResponse:
+      type: object
+      required: [authenticated, csrfToken]
+      properties:
+        authenticated:
+          type: boolean
+          const: false
+        csrfToken:
+          type: string
+
+    AuthStateAuthenticatedResponse:
+      type: object
+      required: [authenticated, authType, user, csrfToken]
+      properties:
+        authenticated:
+          type: boolean
+          const: true
+        authType:
+          $ref: '#/components/schemas/AuthType'
+        user:
+          $ref: '#/components/schemas/AuthenticatedUser'
+        csrfToken:
+          type: string
 
     TenantListItem:
       type: object
@@ -541,7 +1511,6 @@ components:
               format: date-time
         inviteToken:
           type: string
-          description: Exposed only when INVITES_EXPOSE_TOKEN=true.
         csrfToken:
           type: string
 
@@ -559,42 +1528,331 @@ components:
         csrfToken:
           type: string
 
-    AuthenticatedUser:
+    IncidentListResponse:
       type: object
-      required: [id, email, passwordUpdatedAt, createdAt]
+      required: [incidents, nextCursor, csrfToken]
+      properties:
+        incidents:
+          type: array
+          items:
+            $ref: '#/components/schemas/Incident'
+        nextCursor:
+          oneOf:
+            - type: string
+            - type: 'null'
+        csrfToken:
+          type: string
+
+    IncidentItemResponse:
+      type: object
+      required: [incident, csrfToken]
+      properties:
+        incident:
+          $ref: '#/components/schemas/Incident'
+        csrfToken:
+          type: string
+
+    TimelineEventsResponse:
+      type: object
+      required: [events, csrfToken]
+      properties:
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/TimelineEvent'
+        csrfToken:
+          type: string
+
+    TimelineEventItemResponse:
+      type: object
+      required: [event, csrfToken]
+      properties:
+        event:
+          $ref: '#/components/schemas/TimelineEvent'
+        csrfToken:
+          type: string
+
+    IncidentTasksResponse:
+      type: object
+      required: [tasks, csrfToken]
+      properties:
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/IncidentTask'
+        csrfToken:
+          type: string
+
+    IncidentTaskItemResponse:
+      type: object
+      required: [task, csrfToken]
+      properties:
+        task:
+          $ref: '#/components/schemas/IncidentTask'
+        csrfToken:
+          type: string
+
+    IncidentStatusUpdatesResponse:
+      type: object
+      required: [updates, csrfToken]
+      properties:
+        updates:
+          type: array
+          items:
+            $ref: '#/components/schemas/IncidentStatusUpdate'
+        csrfToken:
+          type: string
+
+    IncidentStatusUpdateItemResponse:
+      type: object
+      required: [statusUpdate, csrfToken]
+      properties:
+        statusUpdate:
+          $ref: '#/components/schemas/IncidentStatusUpdate'
+        csrfToken:
+          type: string
+
+    ServiceAccount:
+      type: object
+      required: [id, tenantId, name, ownerUserId, createdByUserId, revokedAt, createdAt, updatedAt]
       properties:
         id:
           type: string
           format: uuid
-        email:
+        tenantId:
           type: string
-          format: email
-        passwordUpdatedAt:
+          format: uuid
+        name:
+          type: string
+        ownerUserId:
+          type: string
+          format: uuid
+        createdByUserId:
+          type: string
+          format: uuid
+        revokedAt:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+        createdAt:
           type: string
           format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ApiKeyRecord:
+      type: object
+      required:
+        [id, tenantId, serviceAccountId, name, keyPrefix, scopes, createdByUserId, lastUsedAt, revokedAt, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        serviceAccountId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        keyPrefix:
+          type: string
+        scopes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApiKeyScope'
+        createdByUserId:
+          type: string
+          format: uuid
+        lastUsedAt:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+        revokedAt:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: 'null'
         createdAt:
           type: string
           format: date-time
 
-    AuthStateAnonymousResponse:
+    CreateServiceAccountRequest:
       type: object
-      required: [authenticated, csrfToken]
+      required: [name]
       properties:
-        authenticated:
-          type: boolean
-          const: false
+        name:
+          type: string
+          minLength: 3
+          maxLength: 120
+        ownerUserId:
+          type: string
+          format: uuid
+
+    ServiceAccountListResponse:
+      type: object
+      required: [serviceAccounts, csrfToken]
+      properties:
+        serviceAccounts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceAccount'
         csrfToken:
           type: string
 
-    AuthStateAuthenticatedResponse:
+    ServiceAccountItemResponse:
       type: object
-      required: [authenticated, user, csrfToken]
+      required: [serviceAccount, csrfToken]
       properties:
-        authenticated:
-          type: boolean
-          const: true
-        user:
-          $ref: '#/components/schemas/AuthenticatedUser'
+        serviceAccount:
+          $ref: '#/components/schemas/ServiceAccount'
+        csrfToken:
+          type: string
+
+    CreateApiKeyRequest:
+      type: object
+      required: [serviceAccountId, name, scopes]
+      properties:
+        serviceAccountId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 3
+          maxLength: 120
+        scopes:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ApiKeyScope'
+
+    ApiKeyListResponse:
+      type: object
+      required: [apiKeys, csrfToken]
+      properties:
+        apiKeys:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApiKeyRecord'
+        csrfToken:
+          type: string
+
+    ApiKeyItemResponse:
+      type: object
+      required: [apiKey, csrfToken]
+      properties:
+        apiKey:
+          $ref: '#/components/schemas/ApiKeyRecord'
+        csrfToken:
+          type: string
+
+    CreateApiKeyResponse:
+      type: object
+      required: [apiKey, secret, redactedSecret, csrfToken]
+      properties:
+        apiKey:
+          $ref: '#/components/schemas/ApiKeyRecord'
+        secret:
+          type: string
+        redactedSecret:
+          type: string
+        csrfToken:
+          type: string
+
+    AuditLogEvent:
+      type: object
+      required:
+        [id, tenantId, actorUserId, action, targetType, targetId, metadata, traceId, ipAddress, userAgent, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          oneOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        actorUserId:
+          oneOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        action:
+          type: string
+        targetType:
+          oneOf:
+            - type: string
+            - type: 'null'
+        targetId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        metadata:
+          type: object
+          additionalProperties: true
+        traceId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        ipAddress:
+          oneOf:
+            - type: string
+            - type: 'null'
+        userAgent:
+          oneOf:
+            - type: string
+            - type: 'null'
+        createdAt:
+          type: string
+          format: date-time
+
+    AuditLogListResponse:
+      type: object
+      required: [events, nextCursor, csrfToken]
+      properties:
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditLogEvent'
+        nextCursor:
+          oneOf:
+            - type: string
+            - type: 'null'
+        csrfToken:
+          type: string
+
+    UsageSummary:
+      type: object
+      required: [tenantId, metric, windowHours, used, limit, remaining]
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+        metric:
+          type: string
+        windowHours:
+          type: integer
+          minimum: 1
+        used:
+          type: integer
+          minimum: 0
+        limit:
+          type: integer
+          minimum: 0
+        remaining:
+          type: integer
+          minimum: 0
+
+    UsageSummaryResponse:
+      type: object
+      required: [usage, csrfToken]
+      properties:
+        usage:
+          $ref: '#/components/schemas/UsageSummary'
         csrfToken:
           type: string
 

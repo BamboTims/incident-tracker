@@ -113,7 +113,7 @@ export class AuthService {
     return token;
   }
 
-  public async resetPassword(token: string, newPassword: string): Promise<void> {
+  public async resetPassword(token: string, newPassword: string): Promise<string> {
     this.validatePasswordStrength(newPassword);
 
     const tokenHash = hashResetToken(token);
@@ -133,6 +133,7 @@ export class AuthService {
 
     await this.repository.updateUserPassword(user.id, passwordHash, now);
     await this.repository.clearFailedLoginState(user.id);
+    return user.id;
   }
 
   private validatePasswordStrength(password: string): void {
