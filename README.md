@@ -66,6 +66,7 @@ pnpm dev
 ## Auth endpoints
 
 - `GET /v1/auth/me`
+- `POST /v1/auth/signup`
 - `POST /v1/auth/login`
 - `POST /v1/auth/logout`
 - `POST /v1/auth/password/forgot`

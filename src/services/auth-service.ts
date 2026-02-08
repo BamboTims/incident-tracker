@@ -17,6 +17,19 @@ export interface AuthenticatedUser {
   createdAt: Date;
 }
 
+function isDuplicateEmailError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const errorWithCode = error as Error & { code?: string };
+  if (errorWithCode.code === '23505') {
+    return true;
+  }
+
+  return error.message.toLowerCase().includes('email already exists');
+}
+
 function toPublicUser(user: AuthUser): AuthenticatedUser {
   return {
     id: user.id,
@@ -46,10 +59,19 @@ export class AuthService {
       parallelism: 1
     });
 
-    const user = await this.repository.createUser({
-      email,
-      passwordHash
-    });
+    let user: AuthUser;
+    try {
+      user = await this.repository.createUser({
+        email,
+        passwordHash
+      });
+    } catch (error) {
+      if (isDuplicateEmailError(error)) {
+        throw new AppError(409, 'AUTH_EMAIL_IN_USE', 'An account with this email already exists.');
+      }
+
+      throw error;
+    }
 
     return toPublicUser(user);
   }

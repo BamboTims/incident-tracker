@@ -223,6 +223,7 @@ export async function createApp(
   app.use(csrfProtection);
 
   app.use("/v1/auth/login", createAuthRateLimiter());
+  app.use("/v1/auth/signup", createAuthRateLimiter());
   app.use("/v1/auth", createAuthRoutes(authService, auditService, env));
   app.use("/v1/tenants", createTenantRoutes(tenantService, auditService, env));
   app.use(

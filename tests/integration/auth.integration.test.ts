@@ -79,6 +79,43 @@ describe('auth integration', () => {
     expect((meResponse.body as AuthStateResponse).user?.email).toBe('alice@example.com');
   });
 
+  it('signs up a new user and establishes a session', async () => {
+    const csrfToken = await getCsrfToken(agent);
+
+    const signupResponse = await agent
+      .post('/v1/auth/signup')
+      .set('x-csrf-token', csrfToken)
+      .send({
+        email: 'signup@example.com',
+        password: 'SignupPassword123!'
+      });
+
+    expect(signupResponse.status).toBe(201);
+    expect((signupResponse.body as AuthStateResponse).authenticated).toBe(true);
+    expect((signupResponse.body as AuthStateResponse).user?.email).toBe('signup@example.com');
+
+    const meResponse = await agent.get('/v1/auth/me');
+    expect(meResponse.status).toBe(200);
+    expect((meResponse.body as AuthStateResponse).authenticated).toBe(true);
+    expect((meResponse.body as AuthStateResponse).user?.email).toBe('signup@example.com');
+  });
+
+  it('rejects signup when email is already used', async () => {
+    await seedUser(runtime, 'taken@example.com', 'TakenPassword123!');
+    const csrfToken = await getCsrfToken(agent);
+
+    const response = await agent
+      .post('/v1/auth/signup')
+      .set('x-csrf-token', csrfToken)
+      .send({
+        email: 'taken@example.com',
+        password: 'AnotherPassword123!'
+      });
+
+    expect(response.status).toBe(409);
+    expect((response.body as ErrorResponse).code).toBe('AUTH_EMAIL_IN_USE');
+  });
+
   it('invalidates session on logout', async () => {
     await seedUser(runtime, 'bob@example.com', 'ValidPassword123!');
     const csrfToken = await getCsrfToken(agent);

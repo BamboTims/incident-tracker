@@ -13,6 +13,11 @@ const loginSchema = z.object({
   password: z.string().min(1)
 });
 
+const signupSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(12)
+});
+
 const forgotPasswordSchema = z.object({
   email: z.string().email()
 });
@@ -119,6 +124,39 @@ export function createAuthRoutes(authService: AuthService, auditService: AuditSe
       });
 
       response.status(200).json({
+        authenticated: true,
+        authType: 'session',
+        user,
+        csrfToken
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post('/signup', async (request, response, next) => {
+    try {
+      const payload = signupSchema.parse(request.body);
+      const user = await authService.createUser(payload.email, payload.password);
+
+      await regenerateSession(request);
+      request.session.userId = user.id;
+      const csrfToken = issueCsrfToken(request);
+      const requestContext = getAuditRequestContext(request);
+
+      await auditService.recordSafely({
+        action: 'auth.signup',
+        actorUserId: user.id,
+        tenantId: null,
+        targetType: 'user',
+        targetId: user.id,
+        metadata: {
+          authMethod: 'password'
+        },
+        ...requestContext
+      });
+
+      response.status(201).json({
         authenticated: true,
         authType: 'session',
         user,

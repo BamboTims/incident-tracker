@@ -43,6 +43,7 @@ const elements = {
   activityLog: document.getElementById("activity-log"),
   navLinks: Array.from(document.querySelectorAll("[data-page-link]")),
   loginForm: document.getElementById("login-form"),
+  signupButton: document.getElementById("signup-button"),
   logoutButton: document.getElementById("logout-button"),
   loginEmail: document.getElementById("login-email"),
   loginPassword: document.getElementById("login-password"),
@@ -537,6 +538,26 @@ elements.loginForm.addEventListener("submit", async (event) => {
     await refreshCurrentPageData();
   } catch (error) {
     pushActivity(error instanceof Error ? error.message : "Login failed");
+  }
+});
+
+elements.signupButton.addEventListener("click", async () => {
+  try {
+    await request("/v1/auth/signup", {
+      method: "POST",
+      body: JSON.stringify({
+        email: elements.loginEmail.value,
+        password: elements.loginPassword.value,
+      }),
+    });
+
+    elements.loginPassword.value = "";
+    pushActivity("Signup successful");
+    await loadAuthState();
+    await refreshTenants();
+    await refreshCurrentPageData();
+  } catch (error) {
+    pushActivity(error instanceof Error ? error.message : "Signup failed");
   }
 });
 
